@@ -1,0 +1,5 @@
+build
+
+*.swp
+Integral/a.out
+Integral/*.swp
