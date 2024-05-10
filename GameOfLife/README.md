@@ -224,8 +224,8 @@ OPTIONS:
  Клонирование и сборка двуx программ *gameOfLife* и *showMesh*:
 
 ```
-  $ git clone https://github.com/kseniadobrovolskaia/GameOfLife
-  $ cd GameOfLife/
+  $ git clone https://github.com/kseniadobrovolskaia/ParallelComputing
+  $ cd ParallelComputing/GameOfLife/
   $ cmake -B build
   $ cd build/
   $ make
