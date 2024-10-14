@@ -1,121 +1,113 @@
 #ifndef SUDOKU_H
 #define SUDOKU_H
 
+#include <algorithm>
+#include <bitset>
+#include <cassert>
+#include <cmath>
+#include <iostream>
+#include <numeric>
+#include <omp.h>
+#include <string>
+#include <utility>
+#include <vector>
 
-void failWithError(std::string Msg) {
-  throw std::logic_error(Msg);
-}
+#define MAX_NUM_SQUARES 25
+#define STACK_SIZE 25
+
+namespace SudokuGame {
+
+extern unsigned ThreadCount;
+extern bool SolutionFound;
+
+void failWithError(std::string Msg);
 
 static bool isInt(double Val) {
   return abs(round(Val) - Val) < std::numeric_limits<double>::min();
 }
 
-
-class SudokuGame {
-
-  struct Cell {
-    int Value = 0;
-    bool Fixed = false;
-  };
-  
-  unsigned NumSquares;
-  std::vector<std::vector<Cell>> Board;
+class SudokuSolver {
 
 public:
-  void set(const std::vector<int> &Array) {
-    const auto &Squares = sqrt(Array.size());
-    if (!isInt(sqrt(Squares)))
-      failWithError("Введённый массив судоку не является");
-    if (!std::all_of(Array.begin(), Array.end(), [Squares](const auto &Elem) { return Elem <= Squares; }))
-      failWithError("Элементы массива не удовлетворяют судоку");
+  struct Cell {
+    int Value = 0;
+    std::bitset<MAX_NUM_SQUARES> PossibleValues;
+  };
 
-    NumSquares = Squares;
+  struct Board {
+    std::pair<int, int> CurrentIdx;
+    std::vector<std::vector<Cell>> Grid;
 
-    Board.resize(NumSquares);
-    for (auto Elem = 0u, Row = 0u; Row < NumSquares; ++Row) {
-      Board[Row].resize(NumSquares);
-      for (auto Col = 0u; Col < NumSquares; ++Col, ++Elem) {
-        const auto &Value = Array[Elem];
-        if (Value != 0)
-          setValue(Row, Col, Value);
+    Board(const Board &Rhs);
+    Board() = default;
+    Board &operator=(const Board &Rhs) {
+      if (this == &Rhs)
+        return *this;
+
+      CurrentIdx = Rhs.CurrentIdx;
+      assert(!Rhs.Grid.empty());
+      auto Size = Rhs.Grid.size();
+      if (Grid.size())
+        Grid.clear();
+      Grid.resize(Size);
+      for (auto Row = 0; Row < Size; ++Row) {
+        Grid[Row].resize(Size);
+        Grid[Row] = Rhs.Grid[Row];
       }
+
+      return *this;
     }
+  };
+
+private:
+  unsigned NumSquares;
+  unsigned LittleSqDim;
+  Board OriginalGrid;
+  Board SolvedGrid;
+
+public:
+  SudokuSolver(const std::vector<int> &Array);
+
+  const Board &getOriginalGrid() const { return OriginalGrid; }
+  unsigned getNumSquares() const { return NumSquares; }
+  void print() const;
+  void printSolved() const;
+  void print(const Board &Brd) const;
+  void printPossibleValues(const Board &Brd) const;
+
+  bool solve();
+
+private:
+  bool isCorrectInput(const Board &Brd) const;
+
+  void setValue(Board &Brd, int Row, int Col, int Value) const {
+    Brd.Grid[Row][Col].Value = Value;
   }
 
-  void print() const {
-    for (int i = 0; i < NumSquares; ++i) {
-      for (int j = 0; j < NumSquares; ++j) {
-        std::cout << Board[i][j].Value << " ";
-        if ((j + 1) % static_cast<int>(sqrt(NumSquares)) == 0 && j < NumSquares - 1) 
-          std::cout << "| ";
-      }
-      std::cout << "\n";
-      if ((i + 1) % static_cast<int>(sqrt(NumSquares)) == 0 && i < NumSquares - 1)
-        std::cout << "------+-------+-------\n";
-    }
-  }
+  void setPossibleValues(Board &Brd, int Row, int Col) const;
 
+  bool reducePossibleValues(Board &Brd, int Row, int Col) const;
 
-  void setValue(int Row, int Col, int Value) {
-    Board[Row][Col].Value = Value;
-    Board[Row][Col].Fixed = true;
-  }
+  // Humanistic alghorithm
+  bool solveHumanistic(Board &Brd) const;
+  bool eliminate(Board &Brd) const;
+  bool setLoneRangersRow(Board &Brd) const;
+  bool setLoneRangersColumn(Board &Brd) const;
+  bool setLoneRangersLittleSquare(Board &Brd) const;
+  bool setTwinsRow(Board &Brd) const;
+  bool setTwinsColumn(Board &Brd) const;
 
-  bool isValid(int Row, int Col, int Value) const {
-    // Check nums for row
-#pragma omp parallel for
-    for (int C = 0; C < NumSquares; ++C) {
-      if (Board[Row][C].Value == Value && Board[Row][C].Fixed)
-        return false;
-    }
+  // Brute Force alghorithm
+  bool fillPermutationStack(Board &Brd);
+  bool solveBruteForce(Board &Brd);
+  std::pair<int, int> getLeastUnsureCell(const Board &Brd) const;
+  void pushIdxPermutations(const std::pair<int, int> &Idx, Board Brd,
+                           std::vector<Board> *Stack) const;
 
-    // Check nums for column
-#pragma omp parallel for
-    for (int i = 0; i < NumSquares; ++i) {
-      if (Board[i][Col].Value == Value && Board[i][Col].Fixed)
-        return false;
-    }
-
-    // Check nums for little square
-    int StartRow = Row - Row % static_cast<int>(sqrt(NumSquares));
-    int StartCol = Col - Col % static_cast<int>(sqrt(NumSquares));
-#pragma omp parallel for collapse(2)
-    for (int i = 0; i < static_cast<int>(sqrt(NumSquares)); ++i) {
-      for (int j = 0; j < static_cast<int>(sqrt(NumSquares)); ++j) {
-        if (Board[i + StartRow][j + StartCol].Value == 
-            Value && Board[i + StartRow][j + StartCol].Fixed)
-          return false;
-      }
-    }
-
-    return true;
-  }
-
-  bool solve(int row, int col) {
-  if (row == NumSquares - 1 && col == NumSquares)
-    return true;
-
-  if (col == NumSquares) {
-    row++;
-    col = 0;
-  }
-
-  if (Board[row][col].Fixed)
-    return solve(row, col + 1);
- 
-  for (int num = 1; num <= NumSquares; ++num) {
-    if (isValid(row, col, num)) {
-      Board[row][col].Value = num;
-      Board[row][col].Fixed = true;
-      if (solve(row, col + 1))
-        return true;
-      Board[row][col].Value = 0;
-      Board[row][col].Fixed = false;
-    }
-  }
-  return false;
-  } 
+public:
+  bool isSolved(const Board &Grid) const;
 };
 
+} // namespace SudokuGame
 
 #endif // SUDOKU_H
