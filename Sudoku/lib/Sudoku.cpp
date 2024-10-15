@@ -1,5 +1,7 @@
 #include "Sudoku.h"
 
+#define STACK_SIZE 20
+
 namespace SudokuGame {
 
 std::vector<SudokuSolver::Board> PermutationsStack;
@@ -516,7 +518,7 @@ bool SudokuSolver::fillPermutationStack(Board &Brd) {
     if (Stack2->empty())
       return false;
     ++Step;
-  } while (Stack2->size() < ThreadCount);
+  } while (Stack2->size() < STACK_SIZE);
 
   PermutationsStack.resize(Stack2->size());
   PermutationsStack = *Stack2;

@@ -12,8 +12,7 @@
 #include <utility>
 #include <vector>
 
-#define MAX_NUM_SQUARES 25
-#define STACK_SIZE 25
+#define MAX_NUM_SQUARES 64
 
 namespace SudokuGame {
 
